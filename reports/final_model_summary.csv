@@ -1,0 +1,2 @@
+﻿model,dataset,threshold,roc_auc,pr_auc,precision,recall,f1
+CatBoost threshold=0.25,OOT CatBoost Tuned Threshold,0.25,0.7370936848147959,0.6588885508516497,0.5672823218997362,0.6342182890855457,0.5988857938718662

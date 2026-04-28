@@ -1,0 +1,27 @@
+data:
+  customers_path: "data/customers_live.csv"
+  orders_path: "data/orders_live.csv"
+  visits_path: "data/visits_live.csv"
+  support_tickets_path: "data/support_tickets_live.csv"
+
+snapshots:
+  start_date: "2023-04-01"
+  end_date: "2023-12-01"
+  freq: "MS"
+
+split:
+  train_start: "2023-04-01"
+  train_end: "2023-09-01"
+  valid_start: "2023-10-01"
+  valid_end: "2023-11-01"
+  oot_date: "2023-12-01"
+
+target:
+  horizon_days: 90
+  positive_class: 1
+
+model:
+  random_state: 42
+  catboost_iterations: 500
+  catboost_depth: 6
+  catboost_learning_rate: 0.05
