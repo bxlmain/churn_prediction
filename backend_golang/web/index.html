@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Churn Prediction Dashboard</title>
+    <!-- Bootstrap 5 + иконки -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #1a1d23;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+        }
+        .card {
+            background-color: #212529;
+            border: 1px solid #2c3035;
+            border-radius: 1rem;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+        .card-header {
+            background-color: #2c3035;
+            color: #dee2e6;
+            font-weight: 600;
+            font-size: 1.25rem;
+            border-bottom: 1px solid #3a3f44;
+            padding: 1rem 1.25rem;
+        }
+        .form-control {
+            background-color: #1e2125;
+            border: 1px solid #3a3f44;
+            color: #e9ecef;
+        }
+        .form-control:focus {
+            background-color: #1e2125;
+            border-color: #6c757d;
+            color: #e9ecef;
+            box-shadow: none;
+        }
+        .form-label {
+            color: #adb5bd;
+            font-weight: 500;
+        }
+        .btn-primary {
+            background-color: #495057;
+            border: none;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            transition: background-color 0.2s;
+        }
+        .btn-primary:hover {
+            background-color: #5c636a;
+        }
+        .btn-primary:active {
+            background-color: #6c757d !important;
+        }
+        .result-box {
+            border-radius: 0.75rem;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+        .churn-yes {
+            background-color: #2c0b0e;
+            border: 1px solid #842029;
+            color: #f1aeb5;
+        }
+        .churn-yes .probability {
+            color: #ea868f;
+        }
+        .churn-no {
+            background-color: #051b11;
+            border: 1px solid #0f5132;
+            color: #a3cfbb;
+        }
+        .churn-no .probability {
+            color: #75b798;
+        }
+        .probability {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            color: #6c757d;
+        }
+        hr {
+            border-color: #3a3f44;
+        }
+        .alert-danger {
+            background-color: #2c0b0e;
+            border-color: #842029;
+            color: #f1aeb5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="card">
+                    <div class="card-header text-center">
+                        <i class="bi bi-graph-up-arrow"></i> Прогноз оттока клиента
+                    </div>
+                    <div class="card-body p-4">
+                        <form id="churnForm">
+                            <div class="mb-3">
+                                <label for="customerId" class="form-label">Customer ID</label>
+                                <input type="number" class="form-control form-control-lg" id="customerId" placeholder="Например, 1" required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="snapshotDate" class="form-label">Snapshot Date</label>
+                                <input type="date" class="form-control form-control-lg" id="snapshotDate" value="2023-10-01" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 btn-lg">
+                                <i class="bi bi-calculator"></i> Рассчитать
+                            </button>
+                        </form>
+
+                        <div id="loading" class="text-center mt-4" style="display: none;">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Загрузка...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Анализируем данные...</p>
+                        </div>
+
+                        <div id="result" class="mt-4" style="display: none;">
+                            <!-- Результат появится здесь -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('churnForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const customerId = document.getElementById('customerId').value;
+            const snapshotDate = document.getElementById('snapshotDate').value;
+            
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/v1/churn', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customer_id: parseInt(customerId),
+                        snapshot_date: snapshotDate
+                    })
+                });
+
+                if (!response.ok) {
+                    let errorText = '';
+                    if (response.status === 404) {
+                        errorText = 'Клиент не найден. Проверьте ID.';
+                    } else {
+                        const data = await response.json().catch(() => null);
+                        errorText = data?.error || `Ошибка сервера (${response.status})`;
+                    }
+                    document.getElementById('result').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill"></i> ${errorText}
+                        </div>`;
+                    document.getElementById('result').style.display = 'block';
+                    return;
+                }
+
+                const data = await response.json();
+                displayResult(data);
+            } catch (error) {
+                document.getElementById('result').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Ошибка соединения: ${error.message}
+                    </div>`;
+                document.getElementById('result').style.display = 'block';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        });
+        
+        function displayResult(data) {
+            const probPercent = (data.churn_probability * 100).toFixed(1);
+            const isChurn = data.churn_prediction === 1;
+            
+            let emoji, verdict, boxClass, recommendation;
+            if (isChurn) {
+                emoji = '⚠️';
+                verdict = 'Клиент склонен к оттоку';
+                boxClass = 'churn-yes';
+                recommendation = 'Рекомендуется применить программу удержания: скидки, персональное предложение, звонок менеджера.';
+            } else {
+                emoji = '✅';
+                verdict = 'Клиент не склонен к оттоку';
+                boxClass = 'churn-no';
+                recommendation = 'Клиент лоялен. Продолжайте текущую стратегию обслуживания.';
+            }
+            
+            const html = `
+                <div class="result-box ${boxClass}">
+                    <div style="font-size: 3rem;">${emoji}</div>
+                    <h4 class="mt-2">${verdict}</h4>
+                    <div class="probability">${probPercent}%</div>
+                    <p class="mt-2 mb-0">вероятность оттока</p>
+                    <hr>
+                    <p class="small">${recommendation}</p>
+                    <div class="text-muted small mt-2">
+                        Threshold: 0.25 | Snapshot: ${data.snapshot_date} | Customer ID: ${data.customer_id}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('result').innerHTML = html;
+            document.getElementById('result').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

@@ -31,7 +31,11 @@ func (fb *FeatureBuilder) getCustomer(customerID int) (*CustomerStatic, error) {
 	var reg time.Time
 	var city, gender, payment string
 	var age int
-	if err := row.Scan(&reg, &city, &gender, &payment, &age); err != nil {
+	err := row.Scan(&reg, &city, &gender, &payment, &age)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("customer %d not found", customerID)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("customer query: %w", err)
 	}
 	return &CustomerStatic{
@@ -307,6 +311,7 @@ func (fb *FeatureBuilder) BuildFeatureVector(customerID int, snapshotDate time.T
 			featNum[name] = 0
 		}
 	}
+	// округление
 	for k, v := range featNum {
 		featNum[k] = math.Round(v*1000) / 1000
 	}

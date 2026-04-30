@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -48,7 +49,15 @@ func predictHandler(w http.ResponseWriter, r *http.Request) {
 	numFeat, catFeat, err := builder.BuildFeatureVector(req.CustomerID, snapDate)
 	if err != nil {
 		log.Printf("Feature building error: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		if strings.Contains(err.Error(), "not found") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Customer not found",
+			})
+		} else {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -92,9 +101,20 @@ func main() {
 
 	builder = features.NewFeatureBuilder(db)
 
+	// API endpoint
 	http.HandleFunc("/api/v1/churn", predictHandler)
 
-	port := ":8081" // если занят, поменяйте на другой
+	// Статические файлы из папки web
+	fs := http.FileServer(http.Dir("web"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	// Главная страница
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "web/index.html")
+	})
+
+	port := ":8081"
 	log.Printf("Churn prediction backend starting on %s", port)
+	log.Printf("Open http://localhost%s in your browser", port)
 	log.Fatal(http.ListenAndServe(port, nil))
 }
