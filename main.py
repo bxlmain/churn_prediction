@@ -14,7 +14,16 @@ def main():
     print("Saved to data/ml_dataset.csv")
 
     print("Step 3: Training model...")
-    model = train_model(df_features, data["config"])
+    model, evaluation_data = train_model(df_features, data["config"])
+
+    print("\nBest CatBoost threshold:")
+    print(evaluation_data["best_threshold"])
+
+    print("\nValidation CatBoost tuned metrics:")
+    print(evaluation_data["catboost_valid_tuned_metrics"])
+
+    print("\nOOT CatBoost tuned metrics:")
+    print(evaluation_data["catboost_oot_tuned_metrics"])
 
     print("Pipeline finished successfully.")
 

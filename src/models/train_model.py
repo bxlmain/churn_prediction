@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from sklearn.metrics import (
     roc_auc_score,
@@ -14,6 +15,16 @@ import joblib
 
 from src.evaluation.feature_importance import save_feature_importance
 from src.evaluation.final_summary import save_final_model_summary
+from src.evaluation.plots import (
+    save_roc_curve,
+    save_pr_curve,
+    save_confusion_matrix_plot,
+    save_confusion_matrix_table,
+    save_threshold_plot,
+    save_metrics_comparison_plot,
+    save_class_distribution_plot,
+    save_probability_distribution_plot,
+)
 
 
 def split_by_time(df: pd.DataFrame, config: dict):
@@ -69,12 +80,13 @@ def prepare_xy_for_random_forest(
     return X_train_rf, y_train, X_valid_rf, y_valid, X_oot_rf, y_oot
 
 
-def evaluate_model(model, X, y, dataset_name: str):
+def evaluate_model(model, X, y, dataset_name: str, threshold: float = 0.5):
     y_proba = model.predict_proba(X)[:, 1]
-    y_pred = (y_proba >= 0.5).astype(int)
+    y_pred = (y_proba >= threshold).astype(int)
 
     metrics = {
         "dataset": dataset_name,
+        "threshold": threshold,
         "roc_auc": roc_auc_score(y, y_proba),
         "pr_auc": average_precision_score(y, y_proba),
         "precision": precision_score(y, y_pred, zero_division=0),
@@ -82,10 +94,12 @@ def evaluate_model(model, X, y, dataset_name: str):
         "f1": f1_score(y, y_pred, zero_division=0),
     }
 
-    print(f"\n==== {dataset_name} metrics ====")
+    print(f"\n==== {dataset_name} metrics, threshold={threshold:.2f} ====")
     for key, value in metrics.items():
-        if key != "dataset":
+        if isinstance(value, float):
             print(f"{key}: {value:.4f}")
+        else:
+            print(f"{key}: {value}")
 
     print("\nConfusion matrix:")
     print(confusion_matrix(y, y_pred))
@@ -93,7 +107,7 @@ def evaluate_model(model, X, y, dataset_name: str):
     print("\nClassification report:")
     print(classification_report(y, y_pred, zero_division=0))
 
-    return metrics
+    return metrics, y_proba, y_pred
 
 
 def find_best_threshold(model, X_valid, y_valid):
@@ -117,7 +131,7 @@ def find_best_threshold(model, X_valid, y_valid):
     threshold_df = pd.DataFrame(rows)
 
     best_row = threshold_df.sort_values("f1", ascending=False).iloc[0]
-    best_threshold = best_row["threshold"]
+    best_threshold = float(best_row["threshold"])
 
     print("\nThreshold selection on validation:")
     print(threshold_df)
@@ -132,38 +146,37 @@ def find_best_threshold(model, X_valid, y_valid):
     return best_threshold, threshold_df
 
 
-def evaluate_model_with_threshold(model, X, y, dataset_name: str, threshold: float):
-    y_proba = model.predict_proba(X)[:, 1]
-    y_pred = (y_proba >= threshold).astype(int)
+def save_prediction_table(
+    customer_ids,
+    snapshot_dates,
+    y_true,
+    y_proba,
+    y_pred,
+    dataset_name: str,
+    output_dir: str = "reports",
+):
+    os.makedirs(output_dir, exist_ok=True)
 
-    metrics = {
-        "dataset": dataset_name,
-        "threshold": threshold,
-        "roc_auc": roc_auc_score(y, y_proba),
-        "pr_auc": average_precision_score(y, y_proba),
-        "precision": precision_score(y, y_pred, zero_division=0),
-        "recall": recall_score(y, y_pred, zero_division=0),
-        "f1": f1_score(y, y_pred, zero_division=0),
-    }
+    pred_df = pd.DataFrame(
+        {
+            "customer_id": customer_ids.values,
+            "snapshot_date": snapshot_dates.values,
+            "y_true": y_true.values,
+            "churn_probability": y_proba,
+            "churn_prediction": y_pred,
+        }
+    )
 
-    print(f"\n===== {dataset_name} metrics with threshold={threshold:.2f} =====")
-    for key, value in metrics.items():
-        if key not in ["dataset"]:
-            if isinstance(value, float):
-                print(f"{key}: {value:.4f}")
-            else:
-                print(f"{key}: {value}")
+    output_path = os.path.join(output_dir, f"predictions_{dataset_name}.csv")
+    pred_df.to_csv(output_path, index=False, encoding="utf-8-sig")
 
-    print("\nConfusion matrix:")
-    print(confusion_matrix(y, y_pred))
-
-    print("\nClassification report:")
-    print(classification_report(y, y_pred, zero_division=0))
-
-    return metrics
+    return output_path
 
 
 def train_model(df: pd.DataFrame, config: dict):
+    os.makedirs("reports", exist_ok=True)
+    os.makedirs("models", exist_ok=True)
+
     print("Splitting dataset by time...")
 
     train, valid, oot = split_by_time(df, config)
@@ -172,7 +185,17 @@ def train_model(df: pd.DataFrame, config: dict):
     print(f"Validation shape: {valid.shape}")
     print(f"OOT shape: {oot.shape}")
 
+    save_class_distribution_plot(
+        train=train,
+        valid=valid,
+        oot=oot,
+        output_dir="reports",
+        file_name="class_distribution.png",
+    )
+
     X_train, y_train, cat_features = prepare_xy(train)
+    X_valid, y_valid, _ = prepare_xy(valid)
+    X_oot, y_oot, _ = prepare_xy(oot)
 
     pd.DataFrame({"feature": X_train.columns.tolist()}).to_csv(
         "reports/model_features.csv",
@@ -180,16 +203,14 @@ def train_model(df: pd.DataFrame, config: dict):
         encoding="utf-8-sig",
     )
 
-    X_valid, y_valid, _ = prepare_xy(valid)
-    X_oot, y_oot, _ = prepare_xy(oot)
-
     X_train_rf, y_train_rf, X_valid_rf, y_valid_rf, X_oot_rf, y_oot_rf = (
         prepare_xy_for_random_forest(train, valid, oot)
     )
 
     print(f"Categorical features for CatBoost: {cat_features}")
 
-    print("\nTraining baseline Randomforest...")
+    print("\nTraining baseline RandomForest...")
+
     baseline = RandomForestClassifier(
         n_estimators=300,
         max_depth=8,
@@ -200,16 +221,28 @@ def train_model(df: pd.DataFrame, config: dict):
 
     baseline.fit(X_train_rf, y_train_rf)
 
-    baseline_train_metrics = evaluate_model(
-        baseline, X_train_rf, y_train_rf, "Train RandomForest"
+    baseline_train_metrics, _, _ = evaluate_model(
+        baseline,
+        X_train_rf,
+        y_train_rf,
+        "Train RandomForest",
+        threshold=0.5,
     )
 
-    baseline_valid_metrics = evaluate_model(
-        baseline, X_valid_rf, y_valid_rf, "Validation RandomForest"
+    baseline_valid_metrics, _, _ = evaluate_model(
+        baseline,
+        X_valid_rf,
+        y_valid_rf,
+        "Validation RandomForest",
+        threshold=0.5,
     )
 
-    baseline_oot_metrics = evaluate_model(
-        baseline, X_oot_rf, y_oot_rf, "OOT RandomForest"
+    baseline_oot_metrics, _, _ = evaluate_model(
+        baseline,
+        X_oot_rf,
+        y_oot_rf,
+        "OOT RandomForest",
+        threshold=0.5,
     )
 
     print("\nTraining CatBoostClassifier...")
@@ -232,34 +265,185 @@ def train_model(df: pd.DataFrame, config: dict):
         use_best_model=True,
     )
 
-    catboost_valid_metrics = evaluate_model(
-        catboost, X_valid, y_valid, "Validation CatBoost"
+    catboost_train_metrics, catboost_train_proba, catboost_train_pred = evaluate_model(
+        catboost,
+        X_train,
+        y_train,
+        "Train CatBoost",
+        threshold=0.5,
     )
 
-    catboost_oot_metrics = evaluate_model(catboost, X_oot, y_oot, "OOT CatBoost")
+    catboost_valid_metrics, catboost_valid_proba, catboost_valid_pred = evaluate_model(
+        catboost,
+        X_valid,
+        y_valid,
+        "Validation CatBoost",
+        threshold=0.5,
+    )
+
+    catboost_oot_metrics, catboost_oot_proba, catboost_oot_pred = evaluate_model(
+        catboost,
+        X_oot,
+        y_oot,
+        "OOT CatBoost",
+        threshold=0.5,
+    )
 
     best_threshold, threshold_df = find_best_threshold(catboost, X_valid, y_valid)
 
-    catboost_valid_tuned_metrics = evaluate_model_with_threshold(
+    (
+        catboost_valid_tuned_metrics,
+        catboost_valid_tuned_proba,
+        catboost_valid_tuned_pred,
+    ) = evaluate_model(
         catboost,
         X_valid,
         y_valid,
         "Validation CatBoost Tuned Threshold",
-        best_threshold,
+        threshold=best_threshold,
     )
 
-    catboost_oot_tuned_metrics = evaluate_model_with_threshold(
-        catboost,
-        X_oot,
-        y_oot,
-        "OOT CatBoost Tuned Threshold",
-        best_threshold,
+    catboost_oot_tuned_metrics, catboost_oot_tuned_proba, catboost_oot_tuned_pred = (
+        evaluate_model(
+            catboost,
+            X_oot,
+            y_oot,
+            "OOT CatBoost Tuned Threshold",
+            threshold=best_threshold,
+        )
     )
 
     threshold_df.to_csv(
         "reports/catboost_threshold_selection.csv",
         index=False,
         encoding="utf-8-sig",
+    )
+
+    save_threshold_plot(
+        threshold_df=threshold_df,
+        output_dir="reports",
+        file_name="catboost_threshold_selection.png",
+    )
+
+    # ROC и PR-кривые строятся по вероятностям, поэтому порог здесь не нужен.
+    save_roc_curve(
+        y_true=y_valid,
+        y_proba=catboost_valid_proba,
+        dataset_name="validation",
+        output_dir="reports",
+    )
+
+    save_roc_curve(
+        y_true=y_oot,
+        y_proba=catboost_oot_proba,
+        dataset_name="oot",
+        output_dir="reports",
+    )
+
+    save_pr_curve(
+        y_true=y_valid,
+        y_proba=catboost_valid_proba,
+        dataset_name="validation",
+        output_dir="reports",
+    )
+
+    save_pr_curve(
+        y_true=y_oot,
+        y_proba=catboost_oot_proba,
+        dataset_name="oot",
+        output_dir="reports",
+    )
+
+    save_probability_distribution_plot(
+        y_proba=catboost_valid_proba,
+        y_true=y_valid,
+        dataset_name="validation",
+        output_dir="reports",
+    )
+
+    save_probability_distribution_plot(
+        y_proba=catboost_oot_proba,
+        y_true=y_oot,
+        dataset_name="oot",
+        output_dir="reports",
+    )
+
+    # Матрицы ошибок при стандартном пороге 0.5.
+    save_confusion_matrix_plot(
+        y_true=y_valid,
+        y_pred=catboost_valid_pred,
+        dataset_name="validation_default",
+        output_dir="reports",
+    )
+
+    save_confusion_matrix_plot(
+        y_true=y_oot,
+        y_pred=catboost_oot_pred,
+        dataset_name="oot_default",
+        output_dir="reports",
+    )
+
+    save_confusion_matrix_table(
+        y_true=y_valid,
+        y_pred=catboost_valid_pred,
+        dataset_name="validation_default",
+        output_dir="reports",
+    )
+
+    save_confusion_matrix_table(
+        y_true=y_oot,
+        y_pred=catboost_oot_pred,
+        dataset_name="oot_default",
+        output_dir="reports",
+    )
+
+    # Матрицы ошибок при подобранном пороге.
+    save_confusion_matrix_plot(
+        y_true=y_valid,
+        y_pred=catboost_valid_tuned_pred,
+        dataset_name="validation_tuned",
+        output_dir="reports",
+    )
+
+    save_confusion_matrix_plot(
+        y_true=y_oot,
+        y_pred=catboost_oot_tuned_pred,
+        dataset_name="oot_tuned",
+        output_dir="reports",
+    )
+
+    save_confusion_matrix_table(
+        y_true=y_valid,
+        y_pred=catboost_valid_tuned_pred,
+        dataset_name="validation_tuned",
+        output_dir="reports",
+    )
+
+    save_confusion_matrix_table(
+        y_true=y_oot,
+        y_pred=catboost_oot_tuned_pred,
+        dataset_name="oot_tuned",
+        output_dir="reports",
+    )
+
+    save_prediction_table(
+        customer_ids=valid["customer_id"],
+        snapshot_dates=valid["snapshot_date"],
+        y_true=y_valid,
+        y_proba=catboost_valid_tuned_proba,
+        y_pred=catboost_valid_tuned_pred,
+        dataset_name="validation",
+        output_dir="reports",
+    )
+
+    save_prediction_table(
+        customer_ids=oot["customer_id"],
+        snapshot_dates=oot["snapshot_date"],
+        y_true=y_oot,
+        y_proba=catboost_oot_tuned_proba,
+        y_pred=catboost_oot_tuned_pred,
+        dataset_name="oot",
+        output_dir="reports",
     )
 
     feature_importance_df = save_feature_importance(
@@ -278,6 +462,7 @@ def train_model(df: pd.DataFrame, config: dict):
             baseline_train_metrics,
             baseline_valid_metrics,
             baseline_oot_metrics,
+            catboost_train_metrics,
             catboost_valid_metrics,
             catboost_oot_metrics,
             catboost_valid_tuned_metrics,
@@ -285,15 +470,35 @@ def train_model(df: pd.DataFrame, config: dict):
         ]
     )
 
-    metrics_df.to_csv("reports/model_metrics.csv", index=False, encoding="utf-8-sig")
+    metrics_df.to_csv(
+        "reports/model_metrics.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+
+    save_metrics_comparison_plot(
+        metrics_df=metrics_df,
+        output_dir="reports",
+        file_name="model_metrics_comparison.png",
+    )
 
     save_final_model_summary(
         metrics_path="reports/model_metrics.csv",
         output_path="reports/final_model_summary.csv",
     )
 
+    evaluation_data = {
+        "best_threshold": best_threshold,
+        "catboost_valid_metrics": catboost_valid_metrics,
+        "catboost_oot_metrics": catboost_oot_metrics,
+        "catboost_valid_tuned_metrics": catboost_valid_tuned_metrics,
+        "catboost_oot_tuned_metrics": catboost_oot_tuned_metrics,
+        "feature_importance": feature_importance_df,
+    }
+
     print("\nSaved baseline to models/random_forest_baseline.pkl")
     print("Saved model to models/catboost_churn_model.pkl")
     print("Saved metrics to reports/model_metrics.csv")
+    print("Saved plots and additional tables to reports/")
 
-    return catboost
+    return catboost, evaluation_data
