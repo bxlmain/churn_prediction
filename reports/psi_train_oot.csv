@@ -1,0 +1,37 @@
+﻿feature,feature_type,psi,interpretation
+pages_viewed_total,numeric,0.7615515962499158,существенный сдвиг
+visits_total,numeric,0.7515141337585199,существенный сдвиг
+checkout_initiated_total,numeric,0.7467523730244308,существенный сдвиг
+cart_adds_total,numeric,0.6895343203766965,существенный сдвиг
+orders_quantity_total,numeric,0.2586756702678237,существенный сдвиг
+orders_total,numeric,0.24424079695198816,умеренный сдвиг
+orders_amount_total,numeric,0.18852859192389962,умеренный сдвиг
+delivered_orders_total,numeric,0.18376082124477053,умеренный сдвиг
+delivered_amount_total,numeric,0.14896189005440041,умеренный сдвиг
+pages_viewed_mean,numeric,0.14845461530547632,умеренный сдвиг
+session_duration_mean,numeric,0.1446875376105198,умеренный сдвиг
+orders_cancelled_total,numeric,0.10637277790753731,умеренный сдвиг
+customer_lifetime_days,numeric,0.06945400778998853,значимого сдвига нет
+delivered_amount_mean,numeric,0.03977311909023064,значимого сдвига нет
+orders_amount_mean,numeric,0.026862414758249215,значимого сдвига нет
+days_since_last_visit,numeric,0.02205653482435166,значимого сдвига нет
+support_tickets_total,numeric,0.019878212787167608,значимого сдвига нет
+days_since_last_order,numeric,0.019403970153637727,значимого сдвига нет
+visits_90d,numeric,0.014095271118241456,значимого сдвига нет
+cart_adds_30d,numeric,0.011641252615164466,значимого сдвига нет
+delivered_amount_90d,numeric,0.008412247444770012,значимого сдвига нет
+visits_30d,numeric,0.007198213152209178,значимого сдвига нет
+checkout_initiated_90d,numeric,0.005984566670122306,значимого сдвига нет
+cart_adds_90d,numeric,0.005914228825863538,значимого сдвига нет
+support_resolution_days_mean,numeric,0.004476305610873003,значимого сдвига нет
+support_rating_mean,numeric,0.0035330696296533353,значимого сдвига нет
+city,categorical,0.003236109562372663,значимого сдвига нет
+days_since_last_ticket,numeric,0.002152061248948088,значимого сдвига нет
+checkout_initiated_30d,numeric,0.0020784487268811613,значимого сдвига нет
+delivered_orders_90d,numeric,0.0020545112674402962,значимого сдвига нет
+delivered_amount_30d,numeric,0.001959777386638272,значимого сдвига нет
+preferred_payment,categorical,0.001560424152676995,значимого сдвига нет
+age,numeric,0.0009718891046196108,значимого сдвига нет
+delivered_orders_30d,numeric,0.00010519112751256209,значимого сдвига нет
+gender,categorical,5.393037492766866e-05,значимого сдвига нет
+support_tickets_90d,numeric,0.0,значимого сдвига нет

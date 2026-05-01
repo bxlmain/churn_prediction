@@ -25,6 +25,9 @@ def main():
     print("\nOOT CatBoost tuned metrics:")
     print(evaluation_data["catboost_oot_tuned_metrics"])
 
+    print("\nTop PSI features:")
+    print(evaluation_data["psi_report"].head(10))
+
     print("Pipeline finished successfully.")
 
 

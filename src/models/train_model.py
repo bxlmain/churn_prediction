@@ -25,6 +25,7 @@ from src.evaluation.plots import (
     save_class_distribution_plot,
     save_probability_distribution_plot,
 )
+from src.evaluation.drift import calculate_psi_report, save_psi_plot
 
 
 def split_by_time(df: pd.DataFrame, config: dict):
@@ -196,6 +197,26 @@ def train_model(df: pd.DataFrame, config: dict):
     X_train, y_train, cat_features = prepare_xy(train)
     X_valid, y_valid, _ = prepare_xy(valid)
     X_oot, y_oot, _ = prepare_xy(oot)
+
+    print("\nCalculating PSI between Train and OOT...")
+
+    psi_df = calculate_psi_report(
+        train_df=X_train,
+        oot_df=X_oot,
+        feature_columns=X_train.columns.tolist(),
+        categorical_features=cat_features,
+        output_csv_path="reports/psi_train_oot.csv",
+        bins=10,
+    )
+
+    save_psi_plot(
+        psi_df=psi_df,
+        output_png_path="reports/psi_train_oot.png",
+        top_n=20,
+    )
+
+    print("Saved PSI report to reports/psi_train_oot.csv")
+    print("Saved PSI plot to reports/psi_train_oot.png")
 
     pd.DataFrame({"feature": X_train.columns.tolist()}).to_csv(
         "reports/model_features.csv",
@@ -494,6 +515,7 @@ def train_model(df: pd.DataFrame, config: dict):
         "catboost_valid_tuned_metrics": catboost_valid_tuned_metrics,
         "catboost_oot_tuned_metrics": catboost_oot_tuned_metrics,
         "feature_importance": feature_importance_df,
+        "psi_report": psi_df,
     }
 
     print("\nSaved baseline to models/random_forest_baseline.pkl")
